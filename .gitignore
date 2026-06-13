@@ -1,0 +1,15 @@
+# 秘密情報・ローカル状態（コミットしない）
+config.json
+lot_state.json
+*.local.json
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+
+# データ
+data/*.csv
+!data/.gitkeep
