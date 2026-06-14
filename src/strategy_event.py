@@ -58,6 +58,8 @@ def default_event_windows(year: int = 2026) -> List[EventWindow]:
 
 
 class EventStrategy:
+    name = "volatility"
+
     def __init__(self, cfg: dict) -> None:
         e = (cfg.get("event") or {})
         self.range_lookback = int(e.get("range_lookback", 60))  # ブレイク基準レンジの本数
@@ -66,6 +68,8 @@ class EventStrategy:
         self.lots = float(e.get("lots_per_trade", 1.0))
         self.tp_atr = float(e.get("tp_atr", 2.5))
         self.sl_atr = float(e.get("sl_atr", 1.2))
+        self.trail_atr = float(e.get("trail_atr", 1.5))  # 含み益方向にSL追従し利を伸ばす
+        self.always_watch_intervention = bool(e.get("always_watch_intervention", True))
         # 介入監視
         self.intervention_level = float(e.get("intervention_watch_level", 160.0))
         self.spike_lookback = int(e.get("spike_lookback", 30))
@@ -130,9 +134,10 @@ class EventStrategy:
                 side="BUY", price=price, lots=self.lots,
                 take_profit=price + self.tp_atr * a,
                 stop_loss=min(lo, price - self.sl_atr * a),
+                trail_distance=self.trail_atr * a,
                 strategy="event/breakout",
                 urgency="high",
-                reason=f"直近{self.range_lookback}本レンジ上限 {hi:.3f} を上抜け（buffer {buf:.3f}）。順張り買い",
+                reason=f"直近{self.range_lookback}本レンジ上限 {hi:.3f} を上抜け（buffer {buf:.3f}）。順張り買い・トレーリングで利を伸ばす",
                 meta={"range_high": hi, "range_low": lo, "atr": a},
             )
         if price < lo - buf and self._last_break != "DOWN":
@@ -141,18 +146,20 @@ class EventStrategy:
                 side="SELL", price=price, lots=self.lots,
                 take_profit=price - self.tp_atr * a,
                 stop_loss=max(hi, price + self.sl_atr * a),
+                trail_distance=self.trail_atr * a,
                 strategy="event/breakout",
                 urgency="high",
-                reason=f"直近{self.range_lookback}本レンジ下限 {lo:.3f} を下抜け（buffer {buf:.3f}）。順張り売り",
+                reason=f"直近{self.range_lookback}本レンジ下限 {lo:.3f} を下抜け（buffer {buf:.3f}）。順張り売り・トレーリングで利を伸ばす",
                 meta={"range_high": hi, "range_low": lo, "atr": a},
             )
         return None
 
     def evaluate(self, closes: List[float], now: Optional[datetime] = None) -> Optional[Signal]:
         # 介入シグナルは窓に関係なく常時監視（介入は予告なし）
-        iv = self.intervention_signal(closes)
-        if iv is not None:
-            return iv
+        if self.always_watch_intervention:
+            iv = self.intervention_signal(closes)
+            if iv is not None:
+                return iv
         if self.active_window(now) is not None:
             return self.breakout_signal(closes)
         return None

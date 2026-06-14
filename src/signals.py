@@ -14,6 +14,7 @@ class Signal:
     lots: float = 1.0         # 1 lot = 1万通貨
     take_profit: Optional[float] = None
     stop_loss: Optional[float] = None
+    trail_distance: Optional[float] = None  # 設定時、含み益方向に SL を追従（利を伸ばす）
     strategy: str = ""
     urgency: str = "normal"   # "normal" | "high"
     meta: dict = field(default_factory=dict)

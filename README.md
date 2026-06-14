@@ -1,7 +1,11 @@
-# Gun-am_app — みんなのFX 90lot / イベント シグナルBot
+# Gun-am_app — みんなのFX 90lot / イベント シグナルBot（2本立て）
 
-みんなのFX（トレイダーズ証券）の **30万円入金 × 90lot キャンペーン消化**を低リスクで進めつつ、
-**6/16 日銀・6/18 FOMC・為替介入**などの高ボラ局面を狙う **シグナル通知 / ペーパー / 実発注** bot。
+みんなのFX（トレイダーズ証券）向けの**2つの独立したbot**。共通エンジン上で別々に動かせる。
+
+| bot | 目的 | 起動 | 戦略 | 性格 |
+|---|---|---|---|---|
+| 🎯 **高勝率bot** | 30万円×**90lot を低リスクに消化** | `python3 run_winrate.py` | セッション/レンジ/クールダウン付き平均回帰スキャルプ | 高ヒット率・薄利・低ドローダウン |
+| ⚡ **高ボラbot** | **6/16日銀・6/18FOMC・介入で一気に** | `python3 run_volatility.py` | ブレイク順張り＋トレーリング＋介入フェード | 低勝率・損小利大・高リスク |
 
 > **まず読む → [docs/strategy.md](docs/strategy.md)（戦略全文）** と **[docs/event-calendar.md](docs/event-calendar.md)**
 > 純標準ライブラリのみ。`pip install` 不要。Python 3.9+。
@@ -20,18 +24,23 @@
 ## クイックスタート
 
 ```bash
-# 1) 即デモ（合成データでペーパートレード。ネット不要・すぐ終わる）
-python3 run.py --demo
+# --- 高勝率bot（90lot 低リスク消化）---
+python3 run_winrate.py --demo                       # 合成データで即ペーパー検証
+cp config.winrate.example.json config.winrate.json  # 設定（通知先・期限など）を編集
+python3 run_winrate.py                               # 通知モードで起動（発注しない）
 
-# 2) 設定を作る
-cp config.example.json config.json    # 中身を編集（通知先・期限など）
+# --- 高ボラbot（イベント/介入で一気に）---
+python3 run_volatility.py --demo                     # 介入スパイク込みの検証
+cp config.volatility.example.json config.volatility.json
+python3 run_volatility.py
 
-# 3) 通知モードで起動（発注しない・最も安全）
-python3 run.py
-
+# 2本同時に動かしてもOK（lot_state / config は別ファイル）
 # テスト
 python3 -m unittest discover -s tests -v
 ```
+
+> 2つは**完全に別プロセス・別設定・別ロット記録**。役割が違うので資金も分けて運用する
+> （目安：高勝率に8〜9割／高ボラに1〜2割）。詳細は [docs/strategy.md](docs/strategy.md)。
 
 ## 運用モード（`config.json` の `mode`）
 
@@ -55,25 +64,29 @@ python3 -m unittest discover -s tests -v
 ## 構成
 
 ```
-run.py                     エントリポイント（--demo あり）
-config.example.json        設定サンプル
+run_winrate.py             🎯 高勝率bot エントリポイント（--demo あり）
+run_volatility.py          ⚡ 高ボラbot エントリポイント（--demo あり）
+config.winrate.example.json    高勝率bot 設定サンプル
+config.volatility.example.json 高ボラbot 設定サンプル
+config.example.json        共通フォールバック設定
 src/
-  bot.py                   メインループ（tick→足→指標→戦略→通知/約定）
+  engine.py                共通エンジン（tick→足→戦略→通知/約定・勝率集計）
+  strategy_winrate.py      🎯 高勝率: セッション/レンジ/クールダウン付き平均回帰
+  strategy_campaign.py     └ その土台（平均回帰スキャルプ）
+  strategy_event.py        ⚡ 高ボラ: ブレイク＋トレーリング＋介入フェード（6/16,6/18窓）
   indicators.py            EMA / RSI / ATR / Bollinger / レンジ
-  strategy_campaign.py     90lot 低リスク消化（平均回帰スキャルプ）
-  strategy_event.py        イベント・ブレイク & 介入フェード（6/16,6/18窓）
   lot_tracker.py           90lot 進捗 & 残日数からの推奨ペース
   notifier.py              Discord/Slack/Telegram/Webhook 通知
   data_feed.py             synthetic / replay / stooq
-  signals.py               シグナル共通データ構造
+  signals.py               シグナル共通データ構造（TP/SL/トレーリング）
   broker/
     base.py                抽象アダプタ
-    paper.py               ペーパートレード（スプレッド込み損益）
+    paper.py               ペーパートレード（スプレッド/トレーリング/勝率集計）
     minnano_fx.py          みんなのFX実発注スタブ（要TODO実装・既定で発注無効）
 docs/
   strategy.md              戦略全文（必読）
   event-calendar.md        6月イベントの正確な日時(JST)
-tests/                     unittest
+tests/                     unittest（指標・両bot）
 ```
 
 ## 実発注を有効化する前に（`src/broker/minnano_fx.py`）

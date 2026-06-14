@@ -23,6 +23,8 @@ from .signals import Signal
 
 
 class CampaignScalper:
+    name = "campaign"
+
     def __init__(self, cfg: dict) -> None:
         c = (cfg.get("campaign") or {})
         self.ema_period = int(c.get("ema_period", 50))
@@ -37,7 +39,7 @@ class CampaignScalper:
         self.min_atr = float(c.get("min_atr", 0.005))       # 無風すぎる時は見送り
         self.max_atr = float(c.get("max_atr", 0.20))        # 荒れすぎは見送り（イベント側へ）
 
-    def evaluate(self, closes: List[float]) -> Optional[Signal]:
+    def evaluate(self, closes: List[float], now=None) -> Optional[Signal]:
         if len(closes) < max(self.ema_period, self.rsi_period, self.atr_period) + 2:
             return None
         price = closes[-1]
